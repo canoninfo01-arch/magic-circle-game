@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Magic Circle Game</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+      font-family: sans-serif;
+      color: #eee;
+    }
+    h1 { margin: 12px 0 8px; font-size: 18px; letter-spacing: 2px; }
+    #hint { font-size: 13px; color: #888; margin-bottom: 8px; }
+    canvas {
+      background: #0f0f23;
+      border: 1px solid #333;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    #controls {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    button {
+      padding: 6px 16px;
+      background: #e94560;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover { background: #c73652; }
+    label { font-size: 13px; }
+    input[type=color] { cursor: pointer; height: 28px; width: 40px; border: none; }
+    input[type=range] { width: 80px; }
+  </style>
+</head>
+<body>
+  <h1>MAGIC CIRCLE</h1>
+  <p id="hint">ドラッグして魔法陣を描く</p>
+  <canvas id="c"></canvas>
+  <div id="controls">
+    <label>色 <input type="color" id="colorPicker" value="#e94560"></label>
+    <label>太さ <input type="range" id="lineWidth" min="1" max="20" value="3"></label>
+    <button id="fillToggle">塗りつぶし: OFF</button>
+    <button id="clearBtn">クリア</button>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+
+    function resize() {
+      canvas.width = Math.min(window.innerWidth - 32, 600);
+      canvas.height = Math.min(window.innerHeight - 140, 500);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    let drawing = false;
+    let startX, startY;
+    let filled = false;
+    let snapshot;
+
+    const colorPicker = document.getElementById('colorPicker');
+    const lineWidthInput = document.getElementById('lineWidth');
+    const fillToggle = document.getElementById('fillToggle');
+    const clearBtn = document.getElementById('clearBtn');
+
+    fillToggle.addEventListener('click', () => {
+      filled = !filled;
+      fillToggle.textContent = `塗りつぶし: ${filled ? 'ON' : 'OFF'}`;
+    });
+
+    clearBtn.addEventListener('click', () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    });
+
+    function getPos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    }
+
+    function drawCircle(x, y) {
+      const dx = x - startX;
+      const dy = y - startY;
+      const r = Math.sqrt(dx * dx + dy * dy);
+      ctx.putImageData(snapshot, 0, 0);
+      ctx.beginPath();
+      ctx.arc(startX, startY, r, 0, Math.PI * 2);
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = lineWidthInput.value;
+      if (filled) { ctx.fillStyle = colorPicker.value + '88'; ctx.fill(); }
+      ctx.stroke();
+    }
+
+    canvas.addEventListener('mousedown', e => {
+      const p = getPos(e); startX = p.x; startY = p.y;
+      snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      drawing = true;
+    });
+    canvas.addEventListener('mousemove', e => { if (!drawing) return; drawCircle(getPos(e).x, getPos(e).y); });
+    canvas.addEventListener('mouseup', () => { drawing = false; });
+    canvas.addEventListener('mouseleave', () => { drawing = false; });
+
+    canvas.addEventListener('touchstart', e => {
+      e.preventDefault();
+      const p = getPos(e); startX = p.x; startY = p.y;
+      snapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      drawing = true;
+    });
+    canvas.addEventListener('touchmove', e => { e.preventDefault(); if (!drawing) return; drawCircle(getPos(e).x, getPos(e).y); });
+    canvas.addEventListener('touchend', () => { drawing = false; });
+  </script>
+</body>
+</html>
