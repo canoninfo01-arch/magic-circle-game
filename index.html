@@ -20,6 +20,11 @@
         const W = this.scale.width;
         const H = this.scale.height;
 
+        // ターゲット円の定義
+        this.targetX = W / 2;
+        this.targetY = H / 2;
+        this.targetR = 120;
+
         // 背景
         this.add.rectangle(W / 2, H / 2, W, H, 0x0f0f23);
 
@@ -28,66 +33,122 @@
           fontSize: '20px', color: '#e94560', letterSpacing: 4
         }).setOrigin(0.5);
 
-        // ヒント
-        this.hintText = this.add.text(W / 2, 58, 'ドラッグして魔法陣を描け', {
-          fontSize: '13px', color: '#888888'
+        // 下書き円（ガイド）
+        this.guideGraphics = this.add.graphics();
+        this.drawGuide();
+
+        // 描画グラフィックス
+        this.traceGraphics = this.add.graphics();
+
+        // スコアテキスト
+        this.scoreText = this.add.text(W / 2, H - 100, '', {
+          fontSize: '28px', color: '#ffffff', align: 'center'
         }).setOrigin(0.5);
 
-        // 描画用グラフィックス
-        this.drawGraphics = this.add.graphics();
-        this.previewGraphics = this.add.graphics();
+        this.hintText = this.add.text(W / 2, H - 60, '下書きをなぞれ！', {
+          fontSize: '14px', color: '#888888'
+        }).setOrigin(0.5);
 
+        // リセットボタン
+        const btn = this.add.text(W / 2, H - 30, '[ もう一度 ]', {
+          fontSize: '16px', color: '#e94560'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+        btn.on('pointerdown', () => this.resetRound());
+
+        // 描画状態
+        this.tracePoints = [];
         this.drawing = false;
-        this.startX = 0;
-        this.startY = 0;
-        this.circles = [];
 
         // 入力
         this.input.on('pointerdown', (p) => {
+          this.tracePoints = [];
+          this.traceGraphics.clear();
+          this.scoreText.setText('');
           this.drawing = true;
-          this.startX = p.x;
-          this.startY = p.y;
-          this.hintText.setText('');
         });
 
         this.input.on('pointermove', (p) => {
           if (!this.drawing) return;
-          const r = Phaser.Math.Distance.Between(this.startX, this.startY, p.x, p.y);
-          this.previewGraphics.clear();
-          this.previewGraphics.lineStyle(3, 0xe94560, 0.6);
-          this.previewGraphics.strokeCircle(this.startX, this.startY, r);
+          this.tracePoints.push({ x: p.x, y: p.y });
+          this.redrawTrace();
         });
 
-        this.input.on('pointerup', (p) => {
+        this.input.on('pointerup', () => {
           if (!this.drawing) return;
           this.drawing = false;
-          const r = Phaser.Math.Distance.Between(this.startX, this.startY, p.x, p.y);
-          this.previewGraphics.clear();
-
-          if (r > 10) {
-            this.circles.push({ x: this.startX, y: this.startY, r });
-            this.redrawAll();
+          if (this.tracePoints.length > 10) {
+            this.calcScore();
           }
-        });
-
-        // クリアボタン
-        const btn = this.add.text(W / 2, H - 30, '[ クリア ]', {
-          fontSize: '16px', color: '#e94560'
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-        btn.on('pointerdown', () => {
-          this.circles = [];
-          this.drawGraphics.clear();
-          this.hintText.setText('ドラッグして魔法陣を描け');
         });
       }
 
-      redrawAll() {
-        this.drawGraphics.clear();
-        this.circles.forEach(c => {
-          this.drawGraphics.lineStyle(3, 0xe94560, 1);
-          this.drawGraphics.strokeCircle(c.x, c.y, c.r);
+      drawGuide() {
+        this.guideGraphics.clear();
+        // 外側の光彩
+        this.guideGraphics.lineStyle(12, 0x330022, 0.3);
+        this.guideGraphics.strokeCircle(this.targetX, this.targetY, this.targetR);
+        // ガイド円（破線風に複数の短い弧で表現）
+        const segments = 24;
+        for (let i = 0; i < segments; i += 2) {
+          const startAngle = (i / segments) * Math.PI * 2 - Math.PI / 2;
+          const endAngle = ((i + 0.8) / segments) * Math.PI * 2 - Math.PI / 2;
+          this.guideGraphics.lineStyle(2, 0x883355, 0.7);
+          this.guideGraphics.beginPath();
+          this.guideGraphics.arc(this.targetX, this.targetY, this.targetR, startAngle, endAngle);
+          this.guideGraphics.strokePath();
+        }
+        // 中心点
+        this.guideGraphics.fillStyle(0x883355, 0.5);
+        this.guideGraphics.fillCircle(this.targetX, this.targetY, 4);
+      }
+
+      redrawTrace() {
+        this.traceGraphics.clear();
+        if (this.tracePoints.length < 2) return;
+        this.traceGraphics.lineStyle(3, 0xe94560, 1);
+        this.traceGraphics.beginPath();
+        this.traceGraphics.moveTo(this.tracePoints[0].x, this.tracePoints[0].y);
+        for (let i = 1; i < this.tracePoints.length; i++) {
+          this.traceGraphics.lineTo(this.tracePoints[i].x, this.tracePoints[i].y);
+        }
+        this.traceGraphics.strokePath();
+      }
+
+      calcScore() {
+        // 各点からターゲット円までの距離の平均偏差を計算
+        let totalDev = 0;
+        this.tracePoints.forEach(p => {
+          const dist = Phaser.Math.Distance.Between(p.x, p.y, this.targetX, this.targetY);
+          totalDev += Math.abs(dist - this.targetR);
         });
+        const avgDev = totalDev / this.tracePoints.length;
+
+        // 精度スコア（偏差0=100点、偏差40以上=0点）
+        const accuracy = Math.max(0, Math.round(100 - (avgDev / 40) * 100));
+
+        let rank, color;
+        if (accuracy >= 90) { rank = 'PERFECT!!'; color = '#ffdd00'; }
+        else if (accuracy >= 75) { rank = 'GREAT!';   color = '#44eeaa'; }
+        else if (accuracy >= 55) { rank = 'GOOD';     color = '#4488ff'; }
+        else if (accuracy >= 30) { rank = 'MISS...';  color = '#aaaaaa'; }
+        else                     { rank = '???';      color = '#ff44aa'; } // たまに強いやつ用
+
+        this.scoreText.setText(`${rank}\n精度 ${accuracy}%`);
+        this.scoreText.setStyle({ color });
+
+        // 「???」のときは特別エフェクト（禁呪フラグ）
+        if (accuracy < 30 && Math.random() < 0.3) {
+          this.scoreText.setText('⚡ 禁呪発動!! ⚡\n制御不能の力が...');
+          this.scoreText.setStyle({ color: '#ff44aa', fontSize: '22px' });
+        }
+      }
+
+      resetRound() {
+        this.tracePoints = [];
+        this.traceGraphics.clear();
+        this.scoreText.setText('');
+        this.hintText.setText('下書きをなぞれ！');
+        this.drawGuide();
       }
     }
 
