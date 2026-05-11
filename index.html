@@ -13,159 +13,281 @@
 <body>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.87.0/dist/phaser.min.js"></script>
   <script>
-    class DrawScene extends Phaser.Scene {
-      constructor() { super('DrawScene'); }
 
-      create() {
-        const W = this.scale.width;
-        const H = this.scale.height;
+  // ============================
+  //  BattleScene: メインゲーム
+  // ============================
+  class BattleScene extends Phaser.Scene {
+    constructor() { super('BattleScene'); }
 
-        // ターゲット円の定義
-        this.targetX = W / 2;
-        this.targetY = H / 2;
-        this.targetR = 120;
+    create() {
+      const W = this.scale.width;
+      const H = this.scale.height;
+      this.W = W; this.H = H;
 
-        // 背景
-        this.add.rectangle(W / 2, H / 2, W, H, 0x0f0f23);
+      // ボスのステータス
+      this.bossMaxHP = 300;
+      this.bossHP    = 300;
+      this.round     = 1;
+      this.maxRounds = 3;
 
-        // タイトル
-        this.add.text(W / 2, 28, 'MAGIC CIRCLE', {
-          fontSize: '20px', color: '#e94560', letterSpacing: 4
-        }).setOrigin(0.5);
+      this.add.rectangle(W / 2, H / 2, W, H, 0x0f0f23);
 
-        // 下書き円（ガイド）
-        this.guideGraphics = this.add.graphics();
-        this.drawGuide();
+      // === UI ===
+      // タイトル
+      this.add.text(W / 2, 20, 'MAGIC CIRCLE', {
+        fontSize: '18px', color: '#e94560', letterSpacing: 4
+      }).setOrigin(0.5);
 
-        // 描画グラフィックス
-        this.traceGraphics = this.add.graphics();
+      // ボス名
+      this.add.text(W / 2, 48, '🐉 ダークドラゴン', {
+        fontSize: '16px', color: '#ffaa44'
+      }).setOrigin(0.5);
 
-        // スコアテキスト
-        this.scoreText = this.add.text(W / 2, H - 100, '', {
-          fontSize: '28px', color: '#ffffff', align: 'center'
-        }).setOrigin(0.5);
+      // ボスHPバー背景
+      this.add.rectangle(W / 2, 72, W - 40, 14, 0x333333).setOrigin(0.5);
+      this.hpBar = this.add.rectangle(W / 2, 72, W - 40, 14, 0xe94560).setOrigin(0.5);
+      this.hpText = this.add.text(W / 2, 72, `HP ${this.bossHP} / ${this.bossMaxHP}`, {
+        fontSize: '10px', color: '#ffffff'
+      }).setOrigin(0.5);
 
-        this.hintText = this.add.text(W / 2, H - 60, '下書きをなぞれ！', {
-          fontSize: '14px', color: '#888888'
-        }).setOrigin(0.5);
+      // ラウンド表示
+      this.roundText = this.add.text(W / 2, 92, `第 ${this.round} 詠唱`, {
+        fontSize: '13px', color: '#8888cc'
+      }).setOrigin(0.5);
 
-        // リセットボタン
-        const btn = this.add.text(W / 2, H - 30, '[ もう一度 ]', {
-          fontSize: '16px', color: '#e94560'
-        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-        btn.on('pointerdown', () => this.resetRound());
+      // ターゲット円
+      this.targetX = W / 2;
+      this.targetY = H / 2 + 20;
+      this.targetR = 110;
 
-        // 描画状態
+      this.guideGfx = this.add.graphics();
+      this.traceGfx = this.add.graphics();
+      this.glowGfx  = this.add.graphics();
+
+      this.drawGuide();
+
+      // スコア表示
+      this.resultText = this.add.text(W / 2, H - 130, '', {
+        fontSize: '26px', color: '#ffffff', align: 'center'
+      }).setOrigin(0.5);
+
+      this.powerText = this.add.text(W / 2, H - 80, '', {
+        fontSize: '18px', color: '#ffdd00', align: 'center'
+      }).setOrigin(0.5);
+
+      this.hintText = this.add.text(W / 2, H - 45, '下書きをなぞれ！', {
+        fontSize: '13px', color: '#666688'
+      }).setOrigin(0.5);
+
+      // タイマー表示
+      this.timerText = this.add.text(W - 20, H - 45, '', {
+        fontSize: '12px', color: '#aaaaaa'
+      }).setOrigin(1, 0.5);
+
+      // 描画状態
+      this.tracePoints  = [];
+      this.drawing      = false;
+      this.drawStart    = 0;
+      this.waitingNext  = false;
+
+      // 入力
+      this.input.on('pointerdown', (p) => {
+        if (this.waitingNext) return;
         this.tracePoints = [];
+        this.traceGfx.clear();
+        this.glowGfx.clear();
+        this.resultText.setText('');
+        this.powerText.setText('');
+        this.hintText.setText('');
+        this.drawing   = true;
+        this.drawStart = this.time.now;
+      });
+
+      this.input.on('pointermove', (p) => {
+        if (!this.drawing) return;
+        this.tracePoints.push({ x: p.x, y: p.y });
+        this.redrawTrace();
+        // タイム表示
+        const elapsed = ((this.time.now - this.drawStart) / 1000).toFixed(1);
+        this.timerText.setText(`${elapsed}s`);
+      });
+
+      this.input.on('pointerup', () => {
+        if (!this.drawing) return;
         this.drawing = false;
-
-        // 入力
-        this.input.on('pointerdown', (p) => {
-          this.tracePoints = [];
-          this.traceGraphics.clear();
-          this.scoreText.setText('');
-          this.drawing = true;
-        });
-
-        this.input.on('pointermove', (p) => {
-          if (!this.drawing) return;
-          this.tracePoints.push({ x: p.x, y: p.y });
-          this.redrawTrace();
-        });
-
-        this.input.on('pointerup', () => {
-          if (!this.drawing) return;
-          this.drawing = false;
-          if (this.tracePoints.length > 10) {
-            this.calcScore();
-          }
-        });
-      }
-
-      drawGuide() {
-        this.guideGraphics.clear();
-        // 外側の光彩
-        this.guideGraphics.lineStyle(12, 0x330022, 0.3);
-        this.guideGraphics.strokeCircle(this.targetX, this.targetY, this.targetR);
-        // ガイド円（破線風に複数の短い弧で表現）
-        const segments = 24;
-        for (let i = 0; i < segments; i += 2) {
-          const startAngle = (i / segments) * Math.PI * 2 - Math.PI / 2;
-          const endAngle = ((i + 0.8) / segments) * Math.PI * 2 - Math.PI / 2;
-          this.guideGraphics.lineStyle(2, 0x883355, 0.7);
-          this.guideGraphics.beginPath();
-          this.guideGraphics.arc(this.targetX, this.targetY, this.targetR, startAngle, endAngle);
-          this.guideGraphics.strokePath();
+        this.timerText.setText('');
+        if (this.tracePoints.length > 10) {
+          this.calcAndApply();
         }
-        // 中心点
-        this.guideGraphics.fillStyle(0x883355, 0.5);
-        this.guideGraphics.fillCircle(this.targetX, this.targetY, 4);
-      }
-
-      redrawTrace() {
-        this.traceGraphics.clear();
-        if (this.tracePoints.length < 2) return;
-        this.traceGraphics.lineStyle(3, 0xe94560, 1);
-        this.traceGraphics.beginPath();
-        this.traceGraphics.moveTo(this.tracePoints[0].x, this.tracePoints[0].y);
-        for (let i = 1; i < this.tracePoints.length; i++) {
-          this.traceGraphics.lineTo(this.tracePoints[i].x, this.tracePoints[i].y);
-        }
-        this.traceGraphics.strokePath();
-      }
-
-      calcScore() {
-        // 各点からターゲット円までの距離の平均偏差を計算
-        let totalDev = 0;
-        this.tracePoints.forEach(p => {
-          const dist = Phaser.Math.Distance.Between(p.x, p.y, this.targetX, this.targetY);
-          totalDev += Math.abs(dist - this.targetR);
-        });
-        const avgDev = totalDev / this.tracePoints.length;
-
-        // 精度スコア（偏差0=100点、偏差40以上=0点）
-        const accuracy = Math.max(0, Math.round(100 - (avgDev / 40) * 100));
-
-        let rank, color;
-        if (accuracy >= 90) { rank = 'PERFECT!!'; color = '#ffdd00'; }
-        else if (accuracy >= 75) { rank = 'GREAT!';   color = '#44eeaa'; }
-        else if (accuracy >= 55) { rank = 'GOOD';     color = '#4488ff'; }
-        else if (accuracy >= 30) { rank = 'MISS...';  color = '#aaaaaa'; }
-        else                     { rank = '???';      color = '#ff44aa'; } // たまに強いやつ用
-
-        this.scoreText.setText(`${rank}\n精度 ${accuracy}%`);
-        this.scoreText.setStyle({ color });
-
-        // 「???」のときは特別エフェクト（禁呪フラグ）
-        if (accuracy < 30 && Math.random() < 0.3) {
-          this.scoreText.setText('⚡ 禁呪発動!! ⚡\n制御不能の力が...');
-          this.scoreText.setStyle({ color: '#ff44aa', fontSize: '22px' });
-        }
-      }
-
-      resetRound() {
-        this.tracePoints = [];
-        this.traceGraphics.clear();
-        this.scoreText.setText('');
-        this.hintText.setText('下書きをなぞれ！');
-        this.drawGuide();
-      }
+      });
     }
 
-    const config = {
-      type: Phaser.AUTO,
-      backgroundColor: '#0f0f23',
-      scale: {
-        mode: Phaser.Scale.FIT,
-        autoCenter: Phaser.Scale.CENTER_BOTH,
-        width: 390,
-        height: 700
-      },
-      scene: DrawScene,
-      input: { activePointers: 2 }
-    };
+    drawGuide() {
+      this.guideGfx.clear();
+      // 外光
+      this.guideGfx.lineStyle(16, 0x220033, 0.3);
+      this.guideGfx.strokeCircle(this.targetX, this.targetY, this.targetR);
+      // 破線ガイド
+      const segs = 24;
+      for (let i = 0; i < segs; i += 2) {
+        const s = (i / segs) * Math.PI * 2 - Math.PI / 2;
+        const e = ((i + 0.85) / segs) * Math.PI * 2 - Math.PI / 2;
+        this.guideGfx.lineStyle(2, 0x7733aa, 0.8);
+        this.guideGfx.beginPath();
+        this.guideGfx.arc(this.targetX, this.targetY, this.targetR, s, e);
+        this.guideGfx.strokePath();
+      }
+      this.guideGfx.fillStyle(0x7733aa, 0.4);
+      this.guideGfx.fillCircle(this.targetX, this.targetY, 5);
+    }
 
-    new Phaser.Game(config);
+    redrawTrace() {
+      this.traceGfx.clear();
+      if (this.tracePoints.length < 2) return;
+      this.traceGfx.lineStyle(3, 0xe94560, 1);
+      this.traceGfx.beginPath();
+      this.traceGfx.moveTo(this.tracePoints[0].x, this.tracePoints[0].y);
+      for (let i = 1; i < this.tracePoints.length; i++) {
+        this.traceGfx.lineTo(this.tracePoints[i].x, this.tracePoints[i].y);
+      }
+      this.traceGfx.strokePath();
+    }
+
+    calcAndApply() {
+      const elapsed = (this.time.now - this.drawStart) / 1000;
+
+      // 精度計算
+      let totalDev = 0;
+      this.tracePoints.forEach(p => {
+        const d = Phaser.Math.Distance.Between(p.x, p.y, this.targetX, this.targetY);
+        totalDev += Math.abs(d - this.targetR);
+      });
+      const avgDev  = totalDev / this.tracePoints.length;
+      const accuracy = Math.max(0, Math.round(100 - (avgDev / 40) * 100));
+
+      // 速さボーナス（3秒以内=最大2倍、10秒以上=0.5倍）
+      const speedMult = Math.max(0.5, Math.min(2.0, 3.0 / elapsed)).toFixed(2);
+
+      // 禁呪判定（精度30以下 & 30%の確率）
+      const isForbidden = accuracy < 30 && Math.random() < 0.3;
+
+      let rank, color, damage;
+      if (isForbidden) {
+        rank   = '⚡ 禁呪発動!!';
+        color  = '#ff44aa';
+        damage = Math.floor(Math.random() * 150 + 100); // 100〜250
+      } else if (accuracy >= 90) {
+        rank   = 'PERFECT!!'; color = '#ffdd00';
+        damage = Math.floor(accuracy * speedMult * 1.0);
+      } else if (accuracy >= 75) {
+        rank   = 'GREAT!';    color = '#44eeaa';
+        damage = Math.floor(accuracy * speedMult * 0.8);
+      } else if (accuracy >= 55) {
+        rank   = 'GOOD';      color = '#4488ff';
+        damage = Math.floor(accuracy * speedMult * 0.5);
+      } else if (accuracy >= 30) {
+        rank   = 'MISS...';   color = '#aaaaaa';
+        damage = Math.floor(accuracy * speedMult * 0.2);
+      } else {
+        rank   = 'FAIL';      color = '#555555';
+        damage = 0;
+      }
+
+      // 結果表示
+      this.resultText.setText(rank);
+      this.resultText.setStyle({ color, fontSize: '26px' });
+
+      if (isForbidden) {
+        this.powerText.setText(`ダメージ ${damage}!! (制御不能)`);
+      } else {
+        this.powerText.setText(`精度 ${accuracy}%  ×  速さ ${speedMult}  =  ダメージ ${damage}`);
+      }
+
+      // グロウエフェクト
+      this.flashGlow(damage, isForbidden);
+
+      // ボスHPに反映
+      this.bossHP = Math.max(0, this.bossHP - damage);
+      this.updateHPBar();
+
+      this.waitingNext = true;
+
+      // 次の処理
+      this.time.delayedCall(1800, () => {
+        this.waitingNext = false;
+        if (this.bossHP <= 0) {
+          this.bossDefeated();
+        } else if (this.round >= this.maxRounds) {
+          this.roundEnd();
+        } else {
+          this.round++;
+          this.roundText.setText(`第 ${this.round} 詠唱`);
+          this.traceGfx.clear();
+          this.glowGfx.clear();
+          this.resultText.setText('');
+          this.powerText.setText('');
+          this.hintText.setText('下書きをなぞれ！');
+          this.drawGuide();
+        }
+      });
+    }
+
+    flashGlow(damage, forbidden) {
+      this.glowGfx.clear();
+      const color = forbidden ? 0xff44aa : 0xe94560;
+      const alpha = Math.min(0.8, damage / 150);
+      this.glowGfx.fillStyle(color, alpha);
+      this.glowGfx.fillCircle(this.targetX, this.targetY, this.targetR + 20);
+      this.tweens.add({
+        targets: this.glowGfx,
+        alpha: 0,
+        duration: 600,
+        onComplete: () => { this.glowGfx.clear(); this.glowGfx.setAlpha(1); }
+      });
+    }
+
+    updateHPBar() {
+      const ratio = this.bossHP / this.bossMaxHP;
+      const maxW  = this.W - 40;
+      this.hpBar.width = maxW * ratio;
+      this.hpBar.x     = 20 + (maxW * ratio) / 2;
+      this.hpText.setText(`HP ${this.bossHP} / ${this.bossMaxHP}`);
+      if (ratio < 0.3) this.hpBar.setFillStyle(0xff6600);
+    }
+
+    bossDefeated() {
+      this.resultText.setText('🎉 ボス討伐!!');
+      this.resultText.setStyle({ color: '#ffdd00', fontSize: '30px' });
+      this.powerText.setText('タップでリスタート');
+      this.hintText.setText('');
+      this.input.once('pointerdown', () => this.scene.restart());
+    }
+
+    roundEnd() {
+      this.resultText.setText('詠唱終了...');
+      this.resultText.setStyle({ color: '#8888cc', fontSize: '22px' });
+      this.powerText.setText(`残りHP: ${this.bossHP}\nタップでリスタート`);
+      this.hintText.setText('');
+      this.input.once('pointerdown', () => this.scene.restart());
+    }
+  }
+
+  // ============================
+  const config = {
+    type: Phaser.AUTO,
+    backgroundColor: '#0f0f23',
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: 390,
+      height: 700
+    },
+    scene: BattleScene,
+    input: { activePointers: 2 }
+  };
+
+  new Phaser.Game(config);
   </script>
 </body>
 </html>
