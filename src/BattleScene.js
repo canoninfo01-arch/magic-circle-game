@@ -187,13 +187,25 @@ class BattleScene extends Phaser.Scene {
     const last = this.storedAttacks[this.storedAttacks.length - 1];
     const char = this.character;
     if (last.accuracy < 30 && Math.random() < (char.id === 'fio' ? 0.5 : 0.3)) {
-      last.rank       = 'FORBIDDEN!!';
-      last.color      = char.textColor;
-      last.damage     = Math.floor(Math.random() * 150 + 100);
+      last.rank        = 'FORBIDDEN!!';
+      last.color       = char.textColor;
+      last.damage      = Math.floor(Math.random() * 150 + 100);
       last.isForbidden = true;
     }
 
-    this.fireNextAttack(0);
+    if (last.isForbidden) {
+      this.resultText.setText('FORBIDDEN!!');
+      this.resultText.setStyle({ color: char.textColor, fontSize: '32px' });
+      this.powerText.setText('something incredible...');
+      this.powerText.setStyle({ color: '#ffaa00', fontSize: '16px' });
+      this.time.delayedCall(900, () => {
+        this.resultText.setText('');
+        this.powerText.setText('');
+        this.fireNextAttack(0);
+      });
+    } else {
+      this.fireNextAttack(0);
+    }
   }
 
   fireNextAttack(idx) {
