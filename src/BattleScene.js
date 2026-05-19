@@ -51,6 +51,14 @@ class BattleScene extends Phaser.Scene {
         this.startDrawing();
       } else if (this.gameState === 'drawing' && two) {
         this.storeCombo();
+      } else if (this.gameState === 'drawn' && two) {
+        if (this.pendingDraw) { this.pendingDraw.remove(); this.pendingDraw = null; }
+        this.storeCombo();
+      } else if (this.gameState === 'drawn' && !two) {
+        this.pendingDraw = this.time.delayedCall(200, () => {
+          this.pendingDraw = null;
+          this.startDrawing();
+        });
       } else if (this.gameState === 'finalTap' && two) {
         this.fireChain();
       }
@@ -79,8 +87,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   endDrawing() {
-    // 描いた軌跡はそのまま残す。2本指タップまで待つ。
-    this.gameState = 'drawing';
+    this.gameState = 'drawn';
   }
 
   storeCombo() {
