@@ -12,7 +12,9 @@
     this.round      = 1;
     this.maxRounds  = 3;
     this.gameState  = 'idle';
-    this.drawTimeLimit = 5000;
+    this.turnTimeLimit = 10000;
+    this.turnActive    = false;
+    this.turnStartTime = 0;
 
     this.add.rectangle(W / 2, H / 2, W, H, 0x0f0f23);
     this.add.text(W / 2, 20, 'MAGIC CIRCLE', { fontSize: '18px', color: this.character.textColor, letterSpacing: 4 }).setOrigin(0.5);
@@ -56,10 +58,6 @@
       if (this.input.pointer2.isDown) return;
       this.tracePoints.push({ x: pointer.x, y: pointer.y });
       this.redrawTrace();
-      const rem = Math.max(0, this.drawTimeLimit - (this.time.now - this.drawStart));
-      this.timerText.setText((rem / 1000).toFixed(1) + 's');
-      if (rem <= 1500) this.timerText.setStyle({ color: '#ff4444', fontSize: '20px', fontStyle: 'bold' });
-      else             this.timerText.setStyle({ color: '#ffffff', fontSize: '20px', fontStyle: 'bold' });
     });
 
     this.input.on('pointerup', () => {
@@ -74,15 +72,10 @@
     this.traceGfx.clear(); this.glowGfx.clear(); this.chargeGfx.clear();
     this.resultText.setText(''); this.powerText.setText(''); this.hintText.setText('');
     this.drawStart = this.time.now;
-    if (this.drawTimer) this.drawTimer.remove();
-    this.drawTimer = this.time.delayedCall(this.drawTimeLimit, () => {
-      if (this.gameState === 'drawing') this.endDrawing();
-    });
+    if (!this.turnActive) { this.startTurn(); }
   }
 
   endDrawing() {
-    if (this.drawTimer) { this.drawTimer.remove(); this.drawTimer = null; }
-    this.timerText.setText('');
     if (this.tracePoints.length > 10) {
       this.gameState = 'waiting';
       this.hintText.setText('Tap with 2 fingers!!');
@@ -192,20 +185,20 @@
     this.bossHP = Math.max(0, this.bossHP - damage);
     this.updateHPBar();
 
-    this.time.delayedCall(1800, () => {
+    this.time.delayedCall(1200, () => {
       if (this.bossHP <= 0) {
         this.bossDefeated();
-      } else if (this.round >= this.maxRounds) {
-        this.roundEnd();
+      } else if (this.turnActive) {
+        this.startDrawing();
       } else {
-        this.round++;
-        this.roundText.setText('Round ' + this.round + ' / ' + this.maxRounds);
-        this.resetRound();
+        this.advanceRound();
       }
     });
   }
 
   resetRound() {
+    this.turnActive = false;
+    if (this.turnCountdown) { this.turnCountdown.remove(); this.turnCountdown = null; }
     this.gameState   = 'idle';
     this.tracePoints = [];
     this.traceGfx.clear(); this.glowGfx.clear(); this.chargeGfx.clear();
@@ -215,6 +208,42 @@
     this.timerText.setText('');
     if (this.guidePulse) { this.guidePulse.stop(); this.guideGfx.setAlpha(1); }
     this.drawGuide();
+  }
+
+  startTurn() {
+    this.turnActive    = true;
+    this.turnStartTime = this.time.now;
+    if (this.turnCountdown) this.turnCountdown.remove();
+    this.turnCountdown = this.time.addEvent({
+      delay: 100, repeat: -1,
+      callback: () => {
+        if (!this.turnActive) return;
+        const rem = Math.max(0, this.turnTimeLimit - (this.time.now - this.turnStartTime));
+        this.timerText.setText((rem / 1000).toFixed(1) + 's');
+        if (rem <= 2000) this.timerText.setStyle({ color: '#ff4444', fontSize: '20px', fontStyle: 'bold' });
+        else             this.timerText.setStyle({ color: '#ffffff', fontSize: '20px', fontStyle: 'bold' });
+        if (rem <= 0 && ['drawing', 'waiting', 'idle'].includes(this.gameState)) { this.endTurn(); }
+      }
+    });
+  }
+
+  endTurn() {
+    this.turnActive = false;
+    if (this.turnCountdown) { this.turnCountdown.remove(); this.turnCountdown = null; }
+    this.timerText.setText('');
+    this.traceGfx.clear();
+    if (this.guidePulse) { this.guidePulse.stop(); this.guideGfx.setAlpha(1); }
+    this.advanceRound();
+  }
+
+  advanceRound() {
+    if (this.round >= this.maxRounds) {
+      this.roundEnd();
+    } else {
+      this.round++;
+      this.roundText.setText('Round ' + this.round + ' / ' + this.maxRounds);
+      this.resetRound();
+    }
   }
 
   flashGlow(damage) {
