@@ -93,21 +93,8 @@
     if (this.guidePulse) { this.guidePulse.stop(); this.guideGfx.setAlpha(1); }
     this.gameState = 'charging';
     this.hintText.setText('');
-    this.powerText.setText('Charging...');
-    this.powerText.setStyle({ color: this.character.textColor, fontSize: '20px' });
-
-    let step = 0;
-    this.time.addEvent({
-      delay: 60, repeat: 19,
-      callback: () => {
-        step++;
-        const ratio = step / 20;
-        this.chargeGfx.clear();
-        this.chargeGfx.fillStyle(this.character.color, 0.1 + ratio * 0.4);
-        this.chargeGfx.fillCircle(this.targetX, this.targetY, this.targetR * (0.6 + ratio * 0.7));
-        if (step >= 20) { this.chargeGfx.clear(); this.calcAndApply(); }
-      }
-    });
+    this.chargeGfx.clear();
+    this.calcAndApply();
   }
 
   drawGuide() {
