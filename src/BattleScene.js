@@ -49,6 +49,8 @@ class BattleScene extends Phaser.Scene {
       const two = this.input.pointer1.isDown && this.input.pointer2.isDown;
       if (this.gameState === 'idle' && !two) {
         this.startDrawing();
+      } else if (this.gameState === 'drawing' && two) {
+        this.storeCombo();
       } else if (this.gameState === 'finalTap' && two) {
         this.fireChain();
       }
@@ -77,6 +79,13 @@ class BattleScene extends Phaser.Scene {
   }
 
   endDrawing() {
+    this.tracePoints = [];
+    this.traceGfx.clear();
+    this.drawStart = this.time.now;
+    this.gameState = 'drawing';
+  }
+
+  storeCombo() {
     if (this.tracePoints.length > 10) {
       const score = this.scoreDrawing();
       this.storedAttacks.push(score);
