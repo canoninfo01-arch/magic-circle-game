@@ -79,9 +79,7 @@ class BattleScene extends Phaser.Scene {
   }
 
   endDrawing() {
-    this.tracePoints = [];
-    this.traceGfx.clear();
-    this.drawStart = this.time.now;
+    // 描いた軌跡はそのまま残す。2本指タップまで待つ。
     this.gameState = 'drawing';
   }
 
