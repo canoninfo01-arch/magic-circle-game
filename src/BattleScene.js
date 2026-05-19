@@ -50,6 +50,9 @@
         this.startDrawing();
       } else if (this.gameState === 'waiting' && two) {
         this.startCharge();
+      } else if (this.gameState === 'result' && !two && this.turnActive) {
+        if (this.resultTimer) { this.resultTimer.remove(); this.resultTimer = null; }
+        this.startDrawing();
       }
     });
 
@@ -172,7 +175,7 @@
     this.bossHP = Math.max(0, this.bossHP - damage);
     this.updateHPBar();
 
-    this.time.delayedCall(1200, () => {
+    this.resultTimer = this.time.delayedCall(600, () => {
       if (this.bossHP <= 0) {
         this.bossDefeated();
       } else if (this.turnActive) {
